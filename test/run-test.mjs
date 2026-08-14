@@ -924,6 +924,59 @@ const watchdog = setTimeout(() => {
   ctx.dispose();
 }
 
+// ── 4b. precedence: block > safety-direct > user proxy/fallback > legacy only ─
+// DEFAULT protection (no PROTECT_OFF): the always-merged core baseline plus
+// protectPrivate ranges are in force, so this block pins the exact ordering
+// recommended for the rule list (index.js): block rules first, then the
+// immutable safety-direct baseline, then other user rules, then legacy only.
+{
+  const ctx = fakeCtx();
+  apply(ctx, {
+    noProxy: [],
+    proxies: { default: `http://127.0.0.1:${proxyA.port}` },
+    rules: [
+      { host: "127.0.0.1", action: "block" }, // beats safety-direct AND the proxy rule below
+      { host: "127.0.0.2", action: "proxy", proxy: "default" }, // must NOT tunnel loopback
+      { host: "10.0.0.9", action: "fallback", proxy: "default" }, // must NOT tunnel private
+      { host: "127.0.0.1.nip.io", action: "proxy", proxy: "default" }, // non-protected → proxied
+    ],
+    default: { strategy: "proxy", proxy: "default" },
+  });
+  await tick();
+  proxyA.seen.connects.length = 0;
+
+  // (a) block rule wins over both safety-direct and the proxy rule on the host
+  let blockedErr = null;
+  try {
+    await fetch(`http://127.0.0.1:${direct.port}/blocked`, { signal: AbortSignal.timeout(3000) });
+  } catch (error) {
+    blockedErr = error;
+  }
+  check("precedence: block rule wins over safety-direct and proxy", blockedErr !== null && blockedErr.code === "NETWORK_BLOCKED", blockedErr?.code ?? "none");
+
+  // (b) proxy rule on a loopback host → safety-direct wins (no exfiltration)
+  const loopbackRes = await fetchText(`http://127.0.0.2:${direct.port}/loopback`);
+  check("precedence: proxy rule cannot tunnel loopback (direct)", loopbackRes === "direct:/loopback");
+  await tick();
+  check("precedence: proxy untouched by loopback proxy rule", proxyA.seen.connects.length === 0, JSON.stringify(proxyA.seen.connects));
+
+  // (c) fallback rule on a private host → safety-direct wins (no exfiltration)
+  const privateRes = await fetchSafe(`http://10.0.0.9:${direct.port}/private`, { signal: AbortSignal.timeout(1500) });
+  await tick();
+  check("precedence: fallback rule cannot tunnel private ranges (proxy untouched)", privateRes === null && proxyA.seen.connects.length === 0, JSON.stringify(proxyA.seen.connects));
+
+  // (d) non-protected host with a user proxy rule → proxied as configured
+  const viaProxy = await fetchText(`http://127.0.0.1.nip.io:${direct.port}/normal`);
+  check("precedence: non-protected host follows user proxy rule", viaProxy === "direct:/normal");
+  await tick();
+  check(
+    "precedence: proxy saw exactly one CONNECT for the non-protected host",
+    proxyA.seen.connects.length === 1 && proxyA.seen.connects[0].startsWith(`127.0.0.1.nip.io:${direct.port}`),
+    JSON.stringify(proxyA.seen.connects),
+  );
+  ctx.dispose();
+}
+
 // ── 5. fallback: safe replay vs unsafe ──────────────────────────────────────
 {
   const ctx = fakeCtx();
