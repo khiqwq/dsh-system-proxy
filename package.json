@@ -1,0 +1,71 @@
+{
+  "name": "dsh-system-proxy",
+  "version": "0.2.0",
+  "description": "DSH host plugin — smart outbound HTTP(S) routing: named proxies (http/https/socks4/4a/5/5h), per-host/provider/plugin rules, direct-first fallback with health memory (global fetch + node http/https).",
+  "type": "module",
+  "main": "lib/index.js",
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "packageManager": "npm@11.16.0",
+  "author": {
+    "name": "风花叶",
+    "email": "a15750935737@163.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khiqwq/dsh-system-proxy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/khiqwq/dsh-system-proxy/issues"
+  },
+  "homepage": "https://github.com/khiqwq/dsh-system-proxy#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "cordis",
+    "proxy",
+    "system-proxy",
+    "http-proxy",
+    "https-proxy",
+    "api-proxy",
+    "fetch",
+    "undici",
+    "llm"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node test/run-test.mjs && node test/load-in-cordis.mjs && node test/typert-test.mjs && node test/debug-leak-test.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "http-proxy-agent": "^7.0.2",
+    "https-proxy-agent": "^7.0.6",
+    "socks": "^2.8.9",
+    "undici": ">=7.28.0 <8"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
+    "@deepseek-ai/dsh-typert-registry": "^0.1.0-rc.6",
+    "node-addon-require-builtin": "^0.1.4"
+  },
+  "license": "MIT"
+}

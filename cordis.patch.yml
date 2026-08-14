@@ -1,0 +1,87 @@
+# dsh-system-proxy bundle patch — one loader entry in the profile tree.
+#
+# IMPORTANT: loader patching does not deep-merge config. A later patch that
+# provides `config` replaces the complete config object. Restate every key,
+# named proxy, rule, and default value you want to keep.
+#
+# Environment overrides (read at load time):
+#   DSH_PROXY_URL       proxy URL (must win over YAML `url`)
+#   DSH_PROXY_MODE      auto | env | system | manual
+#   DSH_PROXY_DISABLE   any non-empty value disables the plugin
+#   NO_PROXY / no_proxy merged into the direct baseline
+- insert:
+    - id: system-proxy
+      name: 'dsh-system-proxy'
+      config:
+        enabled: true
+
+        # Legacy-compatible surface. URL schemes: http, https, socks4,
+        # socks4a, socks5, socks5h. Bare host:port is treated as http.
+        mode: auto
+        url: ''
+        noProxy:
+          - localhost
+          - '127.0.0.1'
+          - '::1'
+          - api.deepseek.com
+        only: []
+        patchNodeHttp: true
+        # Always keep core loopback safe. With true (default), also merge
+        # RFC1918, link-local, IPv6 ULA/link-local and metadata direct ranges.
+        protectPrivate: true
+        # Per-host health map cap (LRU eviction; default 10000).
+        # healthMaxEntries: 10000
+
+        # Named proxies (optional). Current schema: object whose values are a
+        # URL string or { url?, source?: system|env, username?, password? }.
+        # proxies:
+        #   default: http://127.0.0.1:7890
+        #   clash-http: http://127.0.0.1:7897
+        #   v2ray-socks: socks5h://127.0.0.1:10808
+        #   legacy-socks: socks4a://127.0.0.1:1080
+        #   os-proxy: { source: system }
+
+        # Rules are an ARRAY and first match wins. host/provider/plugin
+        # accept a string or list; ANY specified field matching the request
+        # makes the rule hit (fields are OR). Provider/plugin attribution must
+        # be supplied explicitly through ctx.networkRoute; it is never guessed
+        # from a URL. Actions: direct | proxy | fallback | block.
+        # rules:
+        #   - host: [api.deepseek.com]
+        #     action: direct
+        #   - host: [api.openai.com]
+        #     provider: [openai]
+        #     action: proxy
+        #     proxy: v2ray-socks
+        #   - plugin: [some-unreachable-plugin]
+        #     action: fallback
+        #     proxy: clash-http
+        #     directTimeoutMs: 2000
+        #   - host: [api.blocked.example]
+        #     action: block
+
+        # fallback starts direct and uses health memory / EWMA latency. Automatic
+        # route switching is limited to replay-safe methods; POST and streaming
+        # bodies are not replayed by default. A response that has started is
+        # never retried.
+        # default:
+        #   strategy: fallback        # direct | proxy | fallback
+        #   proxy: default
+        #   directTimeoutMs: 3000
+        #   latencyThresholdMs: 1500
+        #   cooldownMs: 60000
+        #   methods: [GET, HEAD, OPTIONS, TRACE]
+
+        # Optional forgeable route headers. Keep disabled unless every caller
+        # is trusted. When enabled, implementation must remove these internal
+        # headers before forwarding the request upstream.
+        # trustRouteHeaders: false
+        # routeHeaderPrefix: x-dsh-route
+
+        # Security notes:
+        # - keep localhost, private networks, link-local/metadata endpoints and
+        #   NO_PROXY matches direct;
+        # - proxy credentials are stripped from agent URLs (auth via headers /
+        #   SOCKS handshake); avoid DEBUG=* in production with plain-HTTP
+        #   proxying (the http-proxy-agent dependency dumps upstream headers);
+        # - every redirect hop is re-routed through these rules.
