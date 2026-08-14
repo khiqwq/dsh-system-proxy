@@ -427,7 +427,9 @@ function fakeCtx() {
   };
 }
 
-const tick = (ms = 60) => new Promise((resolve) => setTimeout(resolve, ms));
+// Runtime installation resolves proxy sources asynchronously. Leave enough
+// scheduling margin on loaded Windows hosts before asserting global wrappers.
+const tick = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms));
 const fetchText = async (url, init) => {
   const res = await fetch(url, init);
   return res.text();
