@@ -58,7 +58,7 @@ dsh plugin --profile <name> add dsh-system-proxy
 
 ### 交互式配置
 
-安装到带有 Settings 服务的 DSH profile 后，插件会以 `system-proxy` 命名空间注册交互式配置，并通过包内 `./client` Web bundle 在 DSH Settings → 插件页面显示 **系统代理** 配置卡。卡片可编辑基础开关及具名代理的 URL、用户名、`passwordRef` 和只写密码；所有输入先保存在浏览器本地草稿中，只有回车或点击 **保存并加密** 才写入。URL 是普通可见 endpoint 字段并明确拒绝 `user:pass@` userinfo；真正的密码输入使用 `type=password`。命名空间不可用时卡片不会出现；只读状态和保存失败会在卡片内明确显示。保存后插件会串行停止旧传输包装并按最新配置热重装，无需手工编辑 patch 或重启主进程。loader entry 中的 `config` 作为 base 层：没有用户设置时保持原行为，清除用户覆盖后也会回落到该 base。
+安装到带有 Settings 服务的 DSH profile 后，插件会以 `system-proxy` 命名空间注册交互式配置，并通过包内 `./client` Web bundle 在 DSH Settings → 插件页面显示可折叠的 **系统代理 / System Proxy** 配置卡。卡片沿用官方 PluginCard 的紧凑层级、原生 DSH CSS variables、field grid、状态 badge 与 primary/secondary actions；中文 locale 自动显示中文，其他 locale 使用英文 fallback。双语词典由 `@deepseek-ai/dsh-client-locale` 注册并实时订阅切换。卡片可编辑基础开关、代理 URL、`passwordRef` 和只写密码；所有输入先保存在浏览器本地草稿中，折叠不会丢失草稿，只有回车或点击 **保存并加密 / Save and encrypt** 才写入。URL 是普通可见 endpoint 字段并明确拒绝 `user:pass@` userinfo；真正的密码输入使用 `type=password`。命名空间不可用时卡片不会出现；只读状态和保存失败会在卡片内明确显示。保存后插件会串行停止旧传输包装并按最新配置热重装，无需手工编辑 patch 或重启主进程。loader entry 中的 `config` 作为 base 层：没有用户设置时保持原行为，清除用户覆盖后也会回落到该 base。
 
 代理密码必须优先使用 `passwordRef`：隐式 default 代理默认使用 `DSH_PROXY_PASSWORD`（也可改成其他环境变量格式标识符），保存时先写 credential，再写 `passwordRef` 与其他 settings。保存后密码草稿立即清空，页面重新打开时只通过 `credentials.describe()` 获取“已配置/未配置”，不会调用 `resolve()`、回填原文、显示首尾或显示 DPAPI 密文；密码仅通过单向 `credentials.set()` 提交，绝不会保存到 settings。配套的 `dsh-credentials-system` 使用 Windows 当前用户绑定的 DPAPI 密文存储，并替换默认的明文 `dsh-credentials-local`。`role("secret")` 只负责页面/API 脱敏，本身不等于磁盘加密。
 
