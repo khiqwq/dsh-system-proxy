@@ -43,7 +43,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node test/run-test.mjs && node test/load-in-cordis.mjs && node test/typert-test.mjs && node test/debug-leak-test.mjs"
+    "test": "node test/run-test.mjs && node test/load-in-cordis.mjs && node test/typert-test.mjs"
   },
   "publishConfig": {
     "access": "public"

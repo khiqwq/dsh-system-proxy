@@ -69,9 +69,10 @@ const ORIGINAL_HTTP_REQUEST = http.request;
 
 /** Minimal HTTP proxy: CONNECT tunneling + absolute-form http forwarding. */
 function startProxy() {
-  const seen = { connects: [], requests: [] };
+  const seen = { connects: [], requests: [], proxyAuthorization: [] };
   const server = http.createServer((req, res) => {
     seen.requests.push(req.url);
+    seen.proxyAuthorization.push(req.headers["proxy-authorization"] ?? null);
     let target;
     try {
       target = new URL(req.url);
@@ -101,6 +102,7 @@ function startProxy() {
   });
   server.on("connect", (req, socket, head) => {
     seen.connects.push(req.url);
+    seen.proxyAuthorization.push(req.headers["proxy-authorization"] ?? null);
     const idx = req.url.lastIndexOf(":");
     const host = req.url.slice(0, idx);
     const port = Number(req.url.slice(idx + 1)) || 443;
@@ -510,6 +512,7 @@ const watchdog = setTimeout(() => {
     "matchRule AND: all specified fields must match",
     matchRule(andRule, { host: "api.deepseek.com", provider: "openai", plugin: null })?.action === "proxy" &&
       matchRule(andRule, { host: "api.deepseek.com", provider: "other", plugin: null }) === undefined &&
+      matchRule(andRule, { host: "api.deepseek.com", provider: null, plugin: null }) === undefined &&
       matchRule(andRule, { host: "other.com", provider: "openai", plugin: null }) === undefined,
   );
   const orListRule = [normalizeRule({ host: ["a.example.com", "b.example.com"], provider: "p1", action: "proxy" })];
@@ -578,6 +581,15 @@ const watchdog = setTimeout(() => {
   check("health slow proxy-preferred by latency", health.preferProxy("slow"));
   health.recordFailure("down");
   check("health cooldown after failure", health.isCoolingDown("down") && health.preferProxy("down"));
+  const shortCooldown = new HealthRegistry({ cooldownMs: 7, latencyThresholdMs: 9999 });
+  const beforeCooldown = Date.now();
+  shortCooldown.recordFailure("configured");
+  const configuredUntil = shortCooldown.entries.get("configured")?.cooldownUntil ?? 0;
+  check(
+    "health configured cooldownMs drives first failure window",
+    configuredUntil - beforeCooldown >= 5 && configuredUntil - beforeCooldown < 1000,
+    `window=${configuredUntil - beforeCooldown}`,
+  );
   check("health snapshot shape", "fast" in health.snapshot());
 
   // health map is bounded (LRU eviction)

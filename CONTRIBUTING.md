@@ -34,8 +34,6 @@ This runs, in order:
    `DSH_TEST_PROFILE_DIR` to a custom profile directory if needed.
 3. `node test/typert-test.mjs` — `systemProxyStatus` Service + strict Typert
    Remote manifest registration and hot-reload withdrawal.
-4. `node test/debug-leak-test.mjs` — runs a child process under `DEBUG=*`
-   with credentialed proxies and asserts stderr contains no credentials.
 
 ## What to check before opening a PR
 

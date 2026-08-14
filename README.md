@@ -265,7 +265,7 @@ npm install
 npm test
 ```
 
-覆盖：规则/配置/健康单元测试（含 CIDR、`*`、host:port、IPv6、健康表上限）、旧版兼容、多代理路由、provider 作用域、路由头剥离、block、fallback 安全重放（GET 重放 / POST 不重放）、socks4/4a/5/5h 在 fetch 与 node http 双路径（含 DNS 语义与 SSE/backpressure/abort）、逐跳重定向、内网与 metadata 默认保护、node `(url,cb)/(options,cb)/get` 全调用形式、热重载无连接泄漏、dispose 不打断在途请求、ALS 异步迭代器上下文、真实 Cordis loader 挂载与热重载、`DEBUG=*` 凭据泄漏测试。测试使用本地直连服务器、HTTP CONNECT 代理和 SOCKS 测试服务，不需要访问外部 API。
+覆盖：规则/配置/健康单元测试（含 CIDR、`*`、host:port、IPv6、健康表上限）、旧版兼容、多代理路由、provider 作用域、路由头剥离、block、fallback 安全重放（GET 重放 / POST 不重放）、socks4/4a/5/5h 在 fetch 与 node http 双路径（含 DNS 语义与 SSE/backpressure/abort）、逐跳重定向、内网与 metadata 默认保护、node `(url,cb)/(options,cb)/get` 全调用形式、热重载无连接泄漏、dispose 不打断在途请求、ALS 异步迭代器上下文、真实 Cordis loader 挂载与热重载。测试使用本地直连服务器、HTTP CONNECT 代理和 SOCKS 测试服务，不需要访问外部 API。
 
 ## 社区参考
 

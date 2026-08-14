@@ -85,12 +85,12 @@
 
 ## 七、核心安全 8 项逐项测试映射（实现代理回填，供复验）
 
-`npm test` 全绿（run-test 142 断言 + load-in-cordis + typert-test 8 断言 + debug-leak-test）。每项均有具名断言：
+`npm test` 全绿（run-test 153 断言 + load-in-cordis + typert-test 8 断言；debug-leak 自动测试已按维护者决定移除，见下）。每项均有具名断言：
 
 | # | 安全项 | 测试位置（run-test.mjs 或独立文件） |
 | --- | --- | --- |
 | 1 | node `(url, cb)` / `(options, cb)` / `get` 回调不丢失 | block 13：`http.request(url,cb)`、`http.get(url,cb)`、options-form、`https.request(url,cb)` 在代理下回调必触发 |
-| 2 | 代理凭据不出现在 agent URL / 日志 / DEBUG=* | block 0（`parseProxyUrl` 剥 userinfo、display 脱敏、env 凭据分离）+ `test/debug-leak-test.mjs`（`DEBUG=*` 子进程跑 fetch+node http+https(Bearer)+socks，stderr 无 user:pass@/sockuser/Bearer/sk-test） |
+| 2 | 代理凭据不出现在 agent URL / 日志 / DEBUG=* | block 0（`parseProxyUrl` 剥 userinfo、display 脱敏、env 凭据分离）。`DEBUG=*` 子进程自动测试（`test/debug-leak-*.mjs`）已按维护者决定在发布前移除——此前跑 fetch+node http+https(Bearer)+socks 断言 stderr 无 user:pass@/sockuser/Bearer/sk-test 并全绿；防护代码在 lib/ 中不变，可自 git 历史恢复测试 |
 | 3 | 热重载/禁用不泄漏连接（agent close） | block 15：`_getActiveHandles()` socket 数热重载 5 次不增；block 9：在途请求 dispose 后仍完成 |
 | 4 | 重定向逐跳重新决策（防 30x 引向内网/metadata） | block 7：proxy→direct、direct→block 两条链；尊重调用方 manual/error 模式 |
 | 5 | env 优先级（`DSH_PROXY_URL` > YAML `url`） | block 0 单测 |
@@ -108,12 +108,12 @@
 
 ## 六、实现完成记录（2026-08-14，实现代理回填，供复核）
 
-`npm test`（run-test 110 断言 + load-in-cordis + debug-leak）全绿，exit 0。
+`npm test`（run-test + load-in-cordis + typert；debug-leak 自动测试后按维护者决定移除）全绿，exit 0。
 
 | 项 | 状态 | 落点 / 验收测试 |
 | --- | --- | --- |
 | 1 `(url, cb)` 回调 | ✅ | `parseRequestArgs` 支持 `(url,cb)/(options,cb)/(url,opts,cb)/get`；block 13 覆盖 `http.request(url,cb)`、`http.get(url,cb)`、options-form、`https.request(url,cb)`（代理下回调必触发） |
-| 2 DEBUG 凭据剥离 | ✅ | `parseProxyUrl` 剥 userinfo → 干净 URL；认证走 undici `token` / node agent `headers` Proxy-Authorization / SOCKS 握手。**socks-proxy-agent 已移除**（自研 SocksHttp/SocksHttpsAgent，无 debug URL 输出）。`test/debug-leak-test.mjs` 在 `DEBUG=*` 下跑 fetch+node http+https(Bearer)+socks，断言 stderr 无 user:pass@ / sockuser / Bearer / sk-test。残余（依赖固有，README 已注明）：明文 HTTP 请求经 http-proxy-agent 且 `DEBUG=*` 时会 dump 上游请求头；https 内层头在 TLS 内不受影响 |
+| 2 DEBUG 凭据剥离 | ✅ | `parseProxyUrl` 剥 userinfo → 干净 URL；认证走 undici `token` / node agent `headers` Proxy-Authorization / SOCKS 握手。**socks-proxy-agent 已移除**（自研 SocksHttp/SocksHttpsAgent，无 debug URL 输出）。自动测试 `test/debug-leak-*.mjs` 已于发布前按维护者决定删除（git 历史可恢复）：此前在 `DEBUG=*` 下跑 fetch+node http+https(Bearer)+socks，断言 stderr 无 user:pass@ / sockuser / Bearer / sk-test，全部通过后移除；防护代码本身在 lib/ 中不变。残余（依赖固有，README 已注明）：明文 HTTP 请求经 http-proxy-agent 且 `DEBUG=*` 时会 dump 上游请求头；https 内层头在 TLS 内不受影响 |
 | 3 agent close 无泄漏 | ✅ | dispose → undici `close()`（等在途）+ node agent 空闲销毁/free 钩子；block 15 热重载 5 次后 `_getActiveHandles()` socket 数不增 |
 | 4 重定向逐跳 | ✅ | `redirect:"manual"` 手动跟随，每跳重跑规则；block 7（proxy→direct、direct→block），尊重调用方 manual/error 模式，20 跳上限 |
 | 5 env 优先级 | ✅ | `DSH_PROXY_URL` 优先于 YAML `url`；block 0 单测 |
@@ -126,4 +126,4 @@
 | 预览-Windows socks-only / macOS SOCKS | ✅ | 系统代理 socks 条目解析为 `socks5h://`（WinINET + scutil） |
 | 预览-代理名 fail-loud | ✅ | 规则/默认引用缺失代理 → `UNKNOWN_PROXY` 启动失败；`source: system/env` 未开启时降级直连并 warning |
 
-新增测试文件：`test/debug-leak-test.mjs`（spawn `DEBUG=*` 子进程）、`test/debug-leak-child.mjs`。测试代理转发统一用**原始** `http.request`（插件会 patch 它；进程内代理若不避开会造成自环——真实代理为进程外，不受影响）。
+新增测试文件：`test/debug-leak-test.mjs`（spawn `DEBUG=*` 子进程）、`test/debug-leak-child.mjs`（**已按维护者决定在发布前删除**，git 历史可恢复）。测试代理转发统一用**原始** `http.request`（插件会 patch 它；进程内代理若不避开会造成自环——真实代理为进程外，不受影响）。
