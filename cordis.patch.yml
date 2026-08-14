@@ -9,14 +9,6 @@
 #   DSH_PROXY_MODE      auto | env | system | manual
 #   DSH_PROXY_DISABLE   any non-empty value disables the plugin
 #   NO_PROXY / no_proxy merged into the direct baseline
-- id: credentials
-  name: '@deepseek-ai/dsh-credentials-local'
-  disabled: true
-
-- insert:
-    - id: credentials-system
-      name: 'dsh-credentials-system'
-
 - insert:
     - id: system-proxy
       name: 'dsh-system-proxy'
@@ -43,7 +35,7 @@
         # Named proxies (optional). Current schema: object whose values are a
         # URL string or { url?, source?: system|env, username?, passwordRef? }.
         # Secrets entered in the plugin Settings page are write-only and stored
-        # by dsh-credentials-system as DPAPI CurrentUser ciphertext.
+        # by the profile's configured DSH credentials provider.
         # proxies:
         #   default: http://127.0.0.1:7890
         #   clash-http: http://127.0.0.1:7897
