@@ -289,6 +289,18 @@ npm test
 
 不引用无法公开验证的 `dsh-external/*` 地址。
 
-## License
+## 免责声明 / Disclaimer
 
-MIT
+本项目是社区维护的非官方开源插件，与 DeepSeek、DeepSeek Harness 及其关联方不存在隶属、授权、背书或商业合作关系。项目名称及第三方商标仅用于说明兼容对象，其权利归各自权利人所有。
+
+本软件按“原样”（AS IS）提供，不承诺适销性、特定用途适用性、持续可用性、安全性或无错误。代理配置会影响 DSH 主进程的网络流量；错误的路由、凭据或第三方代理可能导致请求失败、信息泄露、额外费用、账号限制或其他损失。使用者应自行审查源码与配置，只使用可信代理，遵守所在地法律、服务条款及网络管理政策，并自行承担部署和使用风险。在法律允许的最大范围内，作者及贡献者不对因使用或无法使用本软件产生的任何索赔、损害或责任负责。若本节与 MIT License 冲突，以 MIT License 英文原文为准。
+
+This is an unofficial, community-maintained open-source plugin. It is not affiliated with, authorized, endorsed, or sponsored by DeepSeek, DeepSeek Harness, or their affiliates. Project names and third-party trademarks are used only to identify compatibility and remain the property of their respective owners.
+
+The software is provided “AS IS,” without warranties of merchantability, fitness for a particular purpose, availability, security, or error-free operation. Proxy configuration affects traffic from the DSH Host process; incorrect routes, credentials, or untrusted proxies may cause failed requests, data exposure, additional charges, account restrictions, or other loss. You are responsible for reviewing the code and configuration, using trusted proxies, complying with applicable law, service terms, and network policies, and accepting all deployment and usage risks. To the maximum extent permitted by law, the authors and contributors are not liable for claims, damages, or other liability arising from use of or inability to use this software. If this section conflicts with the MIT License, the English MIT License text controls.
+
+## 开源协议 / License
+
+本项目采用 [MIT License](./LICENSE)。在保留版权声明和许可声明的前提下，你可以使用、复制、修改、合并、发布、分发、再许可及销售本软件副本。MIT License 不提供任何明示或默示担保，完整且具有法律效力的条款以仓库中的 [LICENSE](./LICENSE) 英文原文为准。
+
+This project is licensed under the [MIT License](./LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies, provided that the copyright and permission notices are retained. The license provides no express or implied warranty. See [LICENSE](./LICENSE) for the complete controlling text.
