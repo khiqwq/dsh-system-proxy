@@ -19,6 +19,7 @@
  * Run: node test/run-test.mjs  (from the package root)
  */
 
+import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
@@ -636,6 +637,40 @@ const watchdog = setTimeout(() => {
     "resolved proxy: clean url + creds + redacted display",
     rp.url === "http://127.0.0.1:1/" && rp.username === "u" && rp.password === "p" && rp.display.includes("***"),
   );
+
+  const referenced = normalizeConfig({
+    mode: "manual",
+    proxies: {
+      secure: { url: "http://127.0.0.1:9", username: "alice", passwordRef: "DSH_PROXY_SECURE_PASSWORD" },
+    },
+    default: { strategy: "proxy", proxy: "secure" },
+  });
+  const resolvedReferenced = await resolveProxyPlan(referenced, {
+    resolveCredential: async (ref) => ref === "DSH_PROXY_SECURE_PASSWORD" ? "resolved-secret" : undefined,
+  });
+  const secureProxy = resolvedReferenced.resolved.get("secure");
+  check("passwordRef resolves through credential seam", secureProxy?.password === "resolved-secret");
+  check("passwordRef is retained as non-secret metadata", secureProxy?.passwordRef === "DSH_PROXY_SECURE_PASSWORD");
+  await assert.rejects(
+    () => resolveProxyPlan(referenced),
+    (error) => error?.code === "CREDENTIAL_SERVICE_UNAVAILABLE",
+  );
+  check("passwordRef without credential service fails loud", true);
+  await assert.rejects(
+    () => resolveProxyPlan(referenced, { resolveCredential: async () => undefined }),
+    (error) => error?.code === "CREDENTIAL_NOT_CONFIGURED",
+  );
+  check("missing referenced credential fails loud", true);
+  assert.throws(
+    () => normalizeConfig({ proxies: { bad: { url: "http://127.0.0.1:9", passwordRef: "BAD-REF" } } }),
+    (error) => error?.code === "INVALID_CREDENTIAL_REF",
+  );
+  check("invalid passwordRef is rejected", true);
+  assert.throws(
+    () => normalizeConfig({ proxies: { bad: { url: "http://127.0.0.1:9", passwordRef: "GOOD_REF", password: "plaintext" } } }),
+    (error) => error?.code === "AMBIGUOUS_PROXY_CREDENTIAL",
+  );
+  check("password and passwordRef cannot coexist", true);
 
   // health
   const health = new HealthRegistry({ cooldownMs: 60000, latencyThresholdMs: 1000 });

@@ -84,8 +84,8 @@ dsh plugin --profile <name> add dsh-system-proxy
       v2ray-socks: socks5h://127.0.0.1:10808
       legacy-socks: socks4a://127.0.0.1:1080
       os-proxy: { source: system }
-      # 也可把 username/password 作为对象字段配置；password 按 secret 展示
-      # authenticated: { url: http://proxy.example:8080, username: user, password: secret }
+      # 推荐用 passwordRef 从 DSH credentials 服务解析密码；不能与 password 同时设置
+      authenticated: { url: http://proxy.example:8080, username: user, passwordRef: DSH_PROXY_OFFICE_PASSWORD }
 
     rules:
       - host: [api.deepseek.com]
@@ -226,7 +226,7 @@ DSH `llm/stream` 集成应包装异步迭代器的 `next` / `return` / `throw` �
 
 ## 凭据与日志安全
 
-代理 URL 可以包含凭据，但日志只能显示 `http://***@proxy.example:8080`。插件不得记录 API `Authorization`、请求 body 或代理密码。
+代理 URL 可以包含凭据，但日志只能显示 `http://***@proxy.example:8080`。插件不得记录 API `Authorization`、请求 body 或代理密码。具名代理可设置 `passwordRef`（环境变量风格标识符，如 `DSH_PROXY_OFFICE_PASSWORD`），插件通过 DSH `credentials.resolve()` 在运行时取值，并在该引用更新时重载代理；缺少凭据服务或引用未配置会明确失败。`passwordRef` 与明文 `password` 不能同时设置。
 
 实现上，URL 里的凭据（或 `username`/`password` 字段）会在解析时**剥离**：交给 undici ProxyAgent / http(s)-proxy-agent 的 URL 不再含用户信息，认证改由 `Proxy-Authorization`（undici `token`、node agent `headers` 选项）或 SOCKS 握手（`userId`/`password`）注入。SOCKS 路径使用插件自研 agent，不做任何 URL 调试输出。`npm test` 含 `DEBUG=*` 泄漏测试：stderr 不得出现代理凭据、URL 形式或上游 Bearer token。
 
