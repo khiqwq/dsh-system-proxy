@@ -41,12 +41,18 @@
         # healthMaxEntries: 10000
 
         # Named proxies (optional). Current schema: object whose values are a
-        # URL string or { url?, source?: system|env, username?, password? }.
+        # URL string or { url?, source?: system|env, username?, passwordRef? }.
+        # Secrets entered in the plugin Settings page are write-only and stored
+        # by dsh-credentials-system as DPAPI CurrentUser ciphertext.
         # proxies:
         #   default: http://127.0.0.1:7890
         #   clash-http: http://127.0.0.1:7897
         #   v2ray-socks: socks5h://127.0.0.1:10808
         #   legacy-socks: socks4a://127.0.0.1:1080
+        #   authenticated:
+        #     url: http://proxy.example:8080
+        #     username: alice
+        #     passwordRef: DSH_PROXY_OFFICE_PASSWORD
         #   os-proxy: { source: system }
 
         # Rules are an ARRAY and first match wins. host/provider/plugin

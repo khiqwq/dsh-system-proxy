@@ -56,7 +56,9 @@ dsh plugin --profile <name> add dsh-system-proxy
 
 ### 交互式配置
 
-安装到带有 Settings 服务的 DSH profile 后，插件会以 `system-proxy` 命名空间注册交互式配置。可在 DSH 的 Settings 页面编辑 `enabled`、代理来源、具名代理、路由规则和默认策略；保存后插件会串行停止旧传输包装并按最新配置热重装，无需手工编辑 patch 或重启主进程。loader entry 中的 `config` 作为 base 层：没有用户设置时保持原行为，清除用户覆盖后也会回落到该 base。代理密码按 schema 的 secret 角色处理。
+安装到带有 Settings 服务的 DSH profile 后，插件会以 `system-proxy` 命名空间注册交互式配置。可在 DSH 的 Settings → 插件页面编辑 `enabled`、代理来源、具名代理、路由规则和默认策略；保存后插件会串行停止旧传输包装并按最新配置热重装，无需手工编辑 patch 或重启主进程。loader entry 中的 `config` 作为 base 层：没有用户设置时保持原行为，清除用户覆盖后也会回落到该 base。
+
+代理密码必须优先使用 `passwordRef`：插件配置页中的密码框是**只写**输入，保存后仅显示“已配置”，不会回填、显示首尾或提供 reveal API；实际值由 `ctx.credentials` 解析。配套的 `dsh-credentials-system` 使用 Windows 当前用户绑定的 DPAPI 密文存储，并替换默认的明文 `dsh-credentials-local`。`role("secret")` 只负责页面/API 脱敏，本身不等于磁盘加密。
 
 仍可直接使用下面的 `cordis.patch.yml` 配置；交互式用户层优先于 entry base。
 

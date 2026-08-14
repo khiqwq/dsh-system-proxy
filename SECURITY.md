@@ -39,6 +39,13 @@ Out of scope:
 ## Security-relevant behavior
 
 - Proxy credentials in URLs are redacted from all plugin log output.
+- New configurations should store only `passwordRef` and resolve it through
+  `ctx.credentials`. With `dsh-credentials-system`, the value is protected by
+  Windows DPAPI CurrentUser and the plugin/settings/status APIs never reveal it.
+  DSH's built-in `dsh-credentials-local` and schema `role("secret")` are
+  redaction/access boundaries, not encryption at rest.
+- `passwordRef` and plaintext `password` cannot coexist; an unavailable or
+  unconfigured credential fails loudly and never degrades to direct routing.
 - Credentials are stripped from the proxy URL before ANY transport agent is
   constructed; authentication is injected separately (undici `token`, node
   agent `headers` `Proxy-Authorization`, SOCKS handshake `userId`/`password`).
