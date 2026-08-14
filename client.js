@@ -81,7 +81,7 @@ window.__ModuleLoader__.load({
     }
     const normalize = (value) => ({ enabled: value?.enabled !== false, mode: typeof value?.mode === "string" ? value.mode : "auto", proxyUrl: typeof value?.url === "string" ? value.url : "", passwordRef: typeof value?.passwordRef === "string" && value.passwordRef.length > 0 ? value.passwordRef : DEFAULT_PASSWORD_REF, patchNodeHttp: value?.patchNodeHttp !== false, protectPrivate: value?.protectPrivate !== false });
     const effectiveRef = (value) => value.trim() || DEFAULT_PASSWORD_REF;
-    const hasUserinfo = (value) => { const text = value.trim(); if (!text) return false; try { const parsed = new URL(/^[a-z][a-z0-9+.-]*:///i.test(text) ? text : `http://${text}`); return parsed.username !== "" || parsed.password !== ""; } catch { return false; } };
+    const hasUserinfo = (value) => { const text = value.trim(); if (!text) return false; try { const parsed = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`); return parsed.username !== "" || parsed.password !== ""; } catch { return false; } };
     const rpcValue = (response, operation) => { if (response?.result?.ok) return response.result.value; const failure = response?.result?.error; throw new Error(failure?.message || failure?.code || operation); };
 
     function SystemProxySettingsCard({ scope, api, locale, t }) {
