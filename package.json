@@ -75,7 +75,7 @@
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",
     "socks": "^2.8.9",
-    "undici": ">=7.28.0 <8",
+    "undici": ">=7.29.0 <8",
     "@deepseek-ai/dsh-settings": "^0.1.0-rc.6"
   },
   "devDependencies": {
