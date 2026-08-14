@@ -651,6 +651,17 @@ const watchdog = setTimeout(() => {
   const secureProxy = resolvedReferenced.resolved.get("secure");
   check("passwordRef resolves through credential seam", secureProxy?.password === "resolved-secret");
   check("passwordRef is retained as non-secret metadata", secureProxy?.passwordRef === "DSH_PROXY_SECURE_PASSWORD");
+  const implicitReferenced = normalizeConfig({
+    mode: "manual",
+    url: "http://127.0.0.1:9",
+    passwordRef: "DSH_PROXY_PASSWORD",
+  });
+  const resolvedImplicit = await resolveProxyPlan(implicitReferenced, {
+    resolveCredential: async (ref) => ref === "DSH_PROXY_PASSWORD" ? "implicit-secret" : undefined,
+  });
+  const implicitProxy = resolvedImplicit.resolved.get("default");
+  check("top-level passwordRef secures implicit default proxy", implicitProxy?.password === "implicit-secret");
+  check("top-level passwordRef remains non-secret metadata", implicitProxy?.passwordRef === "DSH_PROXY_PASSWORD");
   await assert.rejects(
     () => resolveProxyPlan(referenced),
     (error) => error?.code === "CREDENTIAL_SERVICE_UNAVAILABLE",

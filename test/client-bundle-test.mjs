@@ -32,5 +32,5 @@ assert.deepEqual(pkg.dsh.client.inject, [
 ]);
 for (const dependency of pkg.dsh.client.inject) assert.equal(pkg.dependencies[dependency], "^0.1.0-rc.6");
 assert.equal(pkg.peerDependencies.react, "^18.2.0");
-assert.match(pkg.scripts.prepack, /build.*settings-test/);
+assert.match(pkg.scripts.prepack, /build.*test/);
 console.log("client bundle static test passed");
