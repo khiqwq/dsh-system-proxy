@@ -43,7 +43,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node test/run-test.mjs && node test/load-in-cordis.mjs && node test/typert-test.mjs && node test/debug-leak-test.mjs"
+    "test": "node test/run-test.mjs && node test/load-in-cordis.mjs && node test/typert-test.mjs && node test/debug-leak-test.mjs",
+    "settings-test": "node test/settings-test.mjs",
+    "prepack": "npm run settings-test"
   },
   "publishConfig": {
     "access": "public"
@@ -59,7 +61,8 @@
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",
     "socks": "^2.8.9",
-    "undici": ">=7.28.0 <8"
+    "undici": ">=7.28.0 <8",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

@@ -54,6 +54,12 @@ dsh plugin --profile <name> add dsh-system-proxy
 
 ## 配置
 
+### 交互式配置
+
+安装到带有 Settings 服务的 DSH profile 后，插件会以 `system-proxy` 命名空间注册交互式配置。可在 DSH 的 Settings 页面编辑 `enabled`、代理来源、具名代理、路由规则和默认策略；保存后插件会串行停止旧传输包装并按最新配置热重装，无需手工编辑 patch 或重启主进程。loader entry 中的 `config` 作为 base 层：没有用户设置时保持原行为，清除用户覆盖后也会回落到该 base。代理密码按 schema 的 secret 角色处理。
+
+仍可直接使用下面的 `cordis.patch.yml` 配置；交互式用户层优先于 entry base。
+
 配置位于 profile 的 `cordis.patch.yml`。以下示例与当前 package schema 一致：`proxies` 是对象，`rules` 是**数组**，默认策略位于 `default` 对象中。
 
 ```yaml
