@@ -38,6 +38,8 @@ git clone https://github.com/khiqwq/dsh-system-proxy.git
 cd dsh-system-proxy
 npm install
 npm test
+npm run build
+npm run client-test
 
 cd "$env:DSH_HOME\profiles\<name>"
 npm install <dsh-system-proxy 源码目录的绝对路径>
@@ -56,7 +58,7 @@ dsh plugin --profile <name> add dsh-system-proxy
 
 ### 交互式配置
 
-安装到带有 Settings 服务的 DSH profile 后，插件会以 `system-proxy` 命名空间注册交互式配置。可在 DSH 的 Settings → 插件页面编辑 `enabled`、代理来源、具名代理、路由规则和默认策略；保存后插件会串行停止旧传输包装并按最新配置热重装，无需手工编辑 patch 或重启主进程。loader entry 中的 `config` 作为 base 层：没有用户设置时保持原行为，清除用户覆盖后也会回落到该 base。
+安装到带有 Settings 服务的 DSH profile 后，插件会以 `system-proxy` 命名空间注册交互式配置，并通过包内 `./client` Web bundle 在 DSH Settings → 插件页面显示 **System Proxy** 配置卡。卡片可编辑 `enabled`、`mode`、`url`、`patchNodeHttp` 和 `protectPrivate`；所有输入先保存在本地草稿中，只有点击 **Save** 才写入，**Reset** 会丢弃尚未保存的草稿。`url` 使用密码输入框，避免代理凭据直接展示。命名空间不可用时卡片不会出现；只读状态和保存失败会在卡片内明确显示。保存后插件会串行停止旧传输包装并按最新配置热重装，无需手工编辑 patch 或重启主进程。loader entry 中的 `config` 作为 base 层：没有用户设置时保持原行为，清除用户覆盖后也会回落到该 base。
 
 代理密码必须优先使用 `passwordRef`：插件配置页中的密码框是**只写**输入，保存后仅显示“已配置”，不会回填、显示首尾或提供 reveal API；实际值由 `ctx.credentials` 解析。配套的 `dsh-credentials-system` 使用 Windows 当前用户绑定的 DPAPI 密文存储，并替换默认的明文 `dsh-credentials-local`。`role("secret")` 只负责页面/API 脱敏，本身不等于磁盘加密。
 

@@ -43,9 +43,12 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node test/run-test.mjs && node test/load-in-cordis.mjs && node test/typert-test.mjs && node test/debug-leak-test.mjs",
+    "test": "node test/run-test.mjs && node test/load-in-cordis.mjs && node test/typert-test.mjs && node test/debug-leak-test.mjs && npm run settings-test && npm run client-test",
     "settings-test": "node test/settings-test.mjs",
-    "prepack": "npm run settings-test"
+    "prepack": "npm run build && npm test",
+    "build:client": "node build-client.mjs",
+    "build": "npm run build:client",
+    "client-test": "node test/client-bundle-test.mjs"
   },
   "publishConfig": {
     "access": "public"
@@ -53,6 +56,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
     }
   },
   "dependencies": {
@@ -62,7 +73,10 @@
     "https-proxy-agent": "^7.0.6",
     "socks": "^2.8.9",
     "undici": ">=7.28.0 <8",
-    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6"
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "^0.1.0-rc.6"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -71,5 +85,13 @@
     "node-addon-require-builtin": "^0.1.4",
     "selfsigned": "^5.5.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0"
+  }
 }
