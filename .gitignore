@@ -22,3 +22,6 @@ logs/
 # build / coverage output
 dist/
 coverage/
+
+# local test artifacts
+test-output.txt

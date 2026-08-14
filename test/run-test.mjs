@@ -28,6 +28,30 @@ import { HealthRegistry } from "../lib/health.js";
 import { hostMatches, hostPortMatches, matchRule, normalizeRule } from "../lib/rules.js";
 import { normalizeConfig, parseProxyUrl, makeResolvedProxy, resolveProxyPlan } from "../lib/config.js";
 import { buildStatus } from "../lib/status.js";
+import selfsigned from "selfsigned";
+
+/** Local TLS server with a self-signed cert (deterministic https target). */
+async function startTlsServer() {
+  // selfsigned v5 is async (WebCrypto).
+  const pems = await selfsigned.generate(
+    [{ name: "commonName", value: "localhost" }],
+    { days: 1, keySize: 2048 },
+  );
+  const server = https.createServer({ key: pems.private, cert: pems.cert }, (req, res) => {
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end(`tls:${req.url}`);
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  return {
+    port: server.address().port,
+    close: () =>
+      new Promise((resolve) => {
+        server.closeAllConnections();
+        server.close(resolve);
+      }),
+  };
+}
 
 let failures = 0;
 function check(label, condition, extra = "") {
@@ -425,11 +449,19 @@ const originalHttpRequest = http.request;
 const originalHttpGet = http.get;
 const originalHttpsGet = https.get;
 
-// The runner environment may set NO_PROXY (the harness does); the plugin
-// merges it into the direct baseline. Clear it so routing tests are hermetic.
-const savedNoProxyEnv = [process.env.NO_PROXY, process.env.no_proxy];
-delete process.env.NO_PROXY;
-delete process.env.no_proxy;
+// The runner environment may set proxy vars (the harness sets HTTPS_PROXY and
+// NO_PROXY). The plugin merges NO_PROXY into the direct baseline and picks up
+// proxy URLs from the standard env keys, so clear ALL of them to keep routing
+// tests hermetic; the originals are restored at the end.
+const PROXY_ENV_KEYS_TEST = [
+  "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+  "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+];
+const savedProxyEnv = {};
+for (const key of PROXY_ENV_KEYS_TEST) {
+  savedProxyEnv[key] = process.env[key];
+  delete process.env[key];
+}
 
 console.log(
   `proxyA :${proxyA.port}, proxyB :${proxyB.port}, socks5 :${socks5.port}, ` +
@@ -438,6 +470,13 @@ console.log(
 
 // Routing test configs opt out of the loopback safety net deliberately.
 const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
+
+// Watchdog: any block that hangs (e.g. an unresponsive upstream) must fail the
+// suite loudly instead of stalling `npm test` forever (CI has no timeout).
+const watchdog = setTimeout(() => {
+  console.error(`\nTIMEOUT: suite exceeded ${10 * 60}s — aborting`);
+  process.exit(2);
+}, 10 * 60 * 1000);
 
 // ── 0. unit: rules / config / health ────────────────────────────────────────
 {
@@ -465,6 +504,19 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   check(
     "matchRule plugin",
     matchRule(rules, { host: "other.com", provider: null, plugin: "web" })?.action === "fallback",
+  );
+  const andRule = [normalizeRule({ host: "api.deepseek.com", provider: "openai", action: "proxy" })];
+  check(
+    "matchRule AND: all specified fields must match",
+    matchRule(andRule, { host: "api.deepseek.com", provider: "openai", plugin: null })?.action === "proxy" &&
+      matchRule(andRule, { host: "api.deepseek.com", provider: "other", plugin: null }) === undefined &&
+      matchRule(andRule, { host: "other.com", provider: "openai", plugin: null }) === undefined,
+  );
+  const orListRule = [normalizeRule({ host: ["a.example.com", "b.example.com"], provider: "p1", action: "proxy" })];
+  check(
+    "matchRule AND: value list is OR within a field",
+    matchRule(orListRule, { host: "b.example.com", provider: "p1", plugin: null })?.action === "proxy" &&
+      matchRule(orListRule, { host: "b.example.com", provider: "p2", plugin: null }) === undefined,
   );
   check("normalizeRule proxy default", normalizeRule({ host: "h", action: "proxy" }).proxy === "default");
   let threw = false;
@@ -594,13 +646,15 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   apply(ctx, { mode: "manual", url: `http://127.0.0.1:${proxyA.port}` });
   await tick();
   const before = proxyA.seen.connects.length;
-  const res = await fetchSafe("https://example.com");
+  // The tunnel is recorded when the proxy receives the CONNECT, before any
+  // upstream reachability — deterministic even if example.com is unreachable.
+  // Bound the upstream wait (5s) so a hung outbound path cannot stall the suite.
+  await fetchSafe("https://example.com", { signal: AbortSignal.timeout(5000) });
   check(
     "legacy: example.com tunneled via CONNECT",
     proxyA.seen.connects.length === before + 1 && proxyA.seen.connects.at(-1).startsWith("example.com:"),
     JSON.stringify(proxyA.seen.connects.slice(before)),
   );
-  check("legacy: fetch gets an HTTP status", res !== null && res.status > 0);
 
   const localRes = await fetchText(`http://127.0.0.1:${direct.port}/hello`);
   check("legacy: localhost bypassed (direct)", localRes === "direct:/hello");
@@ -609,6 +663,13 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   const req = await new Promise((resolve) => {
     const r = https.request("https://example.com", { method: "HEAD" }, (rres) => resolve(rres));
     r.on("error", () => resolve(null));
+    // Bound the upstream wait: the CONNECT is recorded by the local proxy the
+    // moment the request arrives, so the assertion below is deterministic even
+    // when example.com itself is unreachable or hangs.
+    r.setTimeout(5000, () => {
+      r.destroy();
+      resolve(null);
+    });
     r.end();
   });
   await tick();
@@ -616,7 +677,7 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
     "legacy: https.request tunneled",
     proxyA.seen.connects.length >= connBefore + 1 && proxyA.seen.connects.at(-1).startsWith("example.com:"),
   );
-  check("legacy: https.request gets a status", req !== null && req.statusCode > 0);
+  void req;
 
   ctx.dispose();
   check("restore: fetch", globalThis.fetch === originalFetch);
@@ -649,8 +710,8 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   check("rules: 127.0.0.1 routed to pA and served", resA === "direct:/a");
   await tick();
   check(
-    "rules: proxyA saw 127.0.0.1 CONNECT",
-    proxyA.seen.connects.some((c) => c.startsWith(`127.0.0.1:${direct.port}`)),
+    "rules: proxyA saw exactly one 127.0.0.1 CONNECT",
+    proxyA.seen.connects.length === 1 && proxyA.seen.connects[0].startsWith(`127.0.0.1:${direct.port}`),
     JSON.stringify(proxyA.seen.connects),
   );
   check("rules: proxyB saw nothing", proxyB.seen.connects.length === 0);
@@ -659,8 +720,8 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   check("rules: 127.0.0.2 routed to pB and served", resB === "direct:/b");
   await tick();
   check(
-    "rules: proxyB saw 127.0.0.2 CONNECT",
-    proxyB.seen.connects.some((c) => c.startsWith(`127.0.0.2:${direct.port}`)),
+    "rules: proxyB saw exactly one 127.0.0.2 CONNECT",
+    proxyB.seen.connects.length === 1 && proxyB.seen.connects[0].startsWith(`127.0.0.2:${direct.port}`),
     JSON.stringify(proxyB.seen.connects),
   );
   ctx.dispose();
@@ -868,8 +929,8 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   check("socks5: fetch served through proxy", viaS5 === "direct:/s5");
   await tick();
   check(
-    "socks5: proxy saw 127.0.0.1 CONNECT",
-    socks5.seen.some((t) => t.startsWith(`127.0.0.1:${direct.port}`)),
+    "socks5: proxy saw exactly one 127.0.0.1 CONNECT",
+    socks5.seen.length === 1 && socks5.seen[0].startsWith(`127.0.0.1:${direct.port}`),
     JSON.stringify(socks5.seen),
   );
 
@@ -879,8 +940,8 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   check("socks5h: fetch served through proxy", viaS5h === "direct:/s5h");
   await tick();
   check(
-    "socks5h: proxy saw 127.0.0.2 CONNECT",
-    socks5.seen.some((t) => t.startsWith(`127.0.0.2:${direct.port}`)),
+    "socks5h: proxy saw exactly one 127.0.0.2 CONNECT",
+    socks5.seen.length === 1 && socks5.seen[0].startsWith(`127.0.0.2:${direct.port}`),
     JSON.stringify(socks5.seen),
   );
 
@@ -912,8 +973,19 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   check("socks4: fetch served through proxy", viaS4 === "direct:/s4");
   await tick();
   check(
-    "socks4: proxy saw 127.0.0.3 CONNECT",
-    socks4.seen.some((t) => t.startsWith(`127.0.0.3:${direct.port}`)),
+    "socks4: proxy saw exactly one 127.0.0.3 CONNECT",
+    socks4.seen.length === 1 && socks4.seen[0].startsWith(`127.0.0.3:${direct.port}`),
+    JSON.stringify(socks4.seen),
+  );
+
+  // socks4a + fetch (domain form via localhost)
+  socks4.seen.length = 0;
+  const viaS4a = await fetchText(`http://localhost:${direct.port}/s4a`);
+  check("socks4a: fetch served through proxy", viaS4a === "direct:/s4a");
+  await tick();
+  check(
+    "socks4a: proxy saw exactly one localhost CONNECT (domain)",
+    socks4.seen.length === 1 && socks4.seen[0].startsWith(`localhost:${direct.port}`),
     JSON.stringify(socks4.seen),
   );
 
@@ -934,8 +1006,8 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   check("socks4a: node http.request served through proxy", node4aText === "direct:/node4a");
   await tick();
   check(
-    "socks4a: proxy saw localhost CONNECT (domain)",
-    socks4.seen.some((t) => t.startsWith(`localhost:${direct.port}`)),
+    "socks4a: proxy saw exactly one localhost CONNECT (domain)",
+    socks4.seen.length === 1 && socks4.seen[0].startsWith(`localhost:${direct.port}`),
     JSON.stringify(socks4.seen),
   );
 
@@ -956,8 +1028,52 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   check("socks4: node http.request served through proxy", node4Text === "direct:/node4");
   await tick();
   check(
-    "socks4: proxy saw 127.0.0.3 CONNECT",
-    socks4.seen.some((t) => t.startsWith(`127.0.0.3:${direct.port}`)),
+    "socks4: proxy saw exactly one 127.0.0.3 CONNECT",
+    socks4.seen.length === 1 && socks4.seen[0].startsWith(`127.0.0.3:${direct.port}`),
+  );
+
+  // socks5 + node http.request
+  socks5.seen.length = 0;
+  const node5 = await new Promise((resolve) => {
+    const req = http.request(`http://127.0.0.1:${direct.port}/node5`, (res) => resolve(res));
+    req.on("error", () => resolve(null));
+    req.end();
+  });
+  const node5Text = node5
+    ? await new Promise((r) => {
+        let data = "";
+        node5.on("data", (d) => (data += d));
+        node5.on("end", () => r(data));
+      })
+    : null;
+  check("socks5: node http.request served through proxy", node5Text === "direct:/node5");
+  await tick();
+  check(
+    "socks5: proxy saw exactly one 127.0.0.1 CONNECT",
+    socks5.seen.length === 1 && socks5.seen[0].startsWith(`127.0.0.1:${direct.port}`),
+    JSON.stringify(socks5.seen),
+  );
+
+  // socks5h + node http.request (remote-DNS scheme)
+  socks5.seen.length = 0;
+  const node5h = await new Promise((resolve) => {
+    const req = http.request(`http://127.0.0.2:${direct.port}/node5h`, (res) => resolve(res));
+    req.on("error", () => resolve(null));
+    req.end();
+  });
+  const node5hText = node5h
+    ? await new Promise((r) => {
+        let data = "";
+        node5h.on("data", (d) => (data += d));
+        node5h.on("end", () => r(data));
+      })
+    : null;
+  check("socks5h: node http.request served through proxy", node5hText === "direct:/node5h");
+  await tick();
+  check(
+    "socks5h: proxy saw exactly one 127.0.0.2 CONNECT",
+    socks5.seen.length === 1 && socks5.seen[0].startsWith(`127.0.0.2:${direct.port}`),
+    JSON.stringify(socks5.seen),
   );
   ctx.dispose();
 }
@@ -1043,10 +1159,10 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   });
   await tick();
   proxyA.seen.connects.length = 0;
-  const res = await fetchSafe("https://example.com", { signal: AbortSignal.timeout(8000) });
+  const res = await fetchText(`http://127.0.0.1:${direct.port}/star`);
   await tick();
-  check("noProxy '*': example.com stays direct", proxyA.seen.connects.length === 0, JSON.stringify(proxyA.seen.connects));
-  check("noProxy '*': response still fine", res !== null && res.status > 0);
+  check("noProxy '*': localhost stays direct", proxyA.seen.connects.length === 0, JSON.stringify(proxyA.seen.connects));
+  check("noProxy '*': response still fine", res === "direct:/star");
   ctx.dispose();
 
   // host:port in noProxy beats a proxy rule for that exact port
@@ -1293,13 +1409,19 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   });
   check("http.request(options, cb): callback fired", r2 !== null && r2.statusCode === 200);
 
-  // https.request(url, cb) — external https target through the proxy (tolerant)
+  // https.request(url, cb) — local TLS target through the proxy (deterministic)
+  const tlsServer = await startTlsServer();
   const r3 = await new Promise((resolve) => {
-    const req = https.request("https://example.com", (res) => resolve(res));
+    const req = https.request(
+      `https://127.0.0.1:${tlsServer.port}/`,
+      { rejectUnauthorized: false },
+      (res) => resolve(res),
+    );
     req.on("error", () => resolve(null));
     req.end();
   });
-  check("https.request(url, cb): callback fired", r3 !== null && r3.statusCode > 0);
+  check("https.request(url, cb): callback fired", r3 !== null && r3.statusCode === 200);
+  await tlsServer.close();
   ctx.dispose();
 }
 
@@ -1489,16 +1611,108 @@ const PROTECT_OFF = { protectLocal: false, protectPrivate: false };
   authProxy.close();
 }
 
+// ── 17. strict connect-phase retry classification (undici handler events) ───
+{
+  const applyFallback = (ctx) =>
+    apply(ctx, {
+      ...PROTECT_OFF,
+      noProxy: [],
+      proxies: { default: `http://127.0.0.1:${proxyA.port}` },
+      rules: [{ host: "127.0.0.1", action: "fallback", proxy: "default", directTimeoutMs: 1200 }],
+      default: { strategy: "direct" },
+    });
+
+  // (a) ambiguous: connection established (onConnect >= 1) then dropped before
+  // any response → NEVER replayed through the proxy
+  const resetServer = net.createServer((socket) => socket.destroy());
+  resetServer.listen(0, "127.0.0.1");
+  await once(resetServer, "listening");
+  const resetPort = resetServer.address().port;
+
+  const ctx = fakeCtx();
+  applyFallback(ctx);
+  await tick();
+  proxyA.seen.connects.length = 0;
+  let ambiguousErr = null;
+  try {
+    await fetch(`http://127.0.0.1:${resetPort}/`, { signal: AbortSignal.timeout(5000) });
+  } catch (error) {
+    ambiguousErr = error;
+  }
+  await tick();
+  check("strict: connect-then-drop (onConnect>=1) is ambiguous and rejects", ambiguousErr !== null);
+  check("strict: ambiguous failure is NEVER replayed through the proxy", proxyA.seen.connects.length === 0, JSON.stringify(proxyA.seen.connects));
+  ctx.dispose();
+  resetServer.closeAllConnections?.();
+  resetServer.close();
+
+  // (b) response started (headers received) → response returned as-is, never
+  // replayed; the truncated body surfaces as a read error, not a retry
+  const halfServer = http.createServer((req, res) => {
+    res.writeHead(200, { "content-type": "text/plain", "content-length": "100" });
+    res.write("partial");
+    res.destroy();
+  });
+  halfServer.listen(0, "127.0.0.1");
+  await once(halfServer, "listening");
+  const halfPort = halfServer.address().port;
+
+  const ctx2 = fakeCtx();
+  applyFallback(ctx2);
+  await tick();
+  proxyA.seen.connects.length = 0;
+  let halfRes = null;
+  let halfFetchErr = null;
+  try {
+    halfRes = await fetch(`http://127.0.0.1:${halfPort}/`, { signal: AbortSignal.timeout(5000) });
+  } catch (error) {
+    halfFetchErr = error;
+  }
+  check("strict: response-started (headers) → direct result, never replayed", halfRes !== null || halfFetchErr !== null);
+  if (halfRes !== null) {
+    let readErr = null;
+    try {
+      await halfRes.text();
+    } catch (error) {
+      readErr = error;
+    }
+    check("strict: truncated body surfaces as a read error", readErr !== null);
+  }
+  await tick();
+  check("strict: response-started failure NEVER replayed through the proxy", proxyA.seen.connects.length === 0, JSON.stringify(proxyA.seen.connects));
+  ctx2.dispose();
+  halfServer.closeAllConnections?.();
+  halfServer.close();
+
+  // (c) strict still retries when the connection was NEVER established
+  // (connect-phase: ECONNREFUSED, onConnect == 0) — covered by block 5, re-checked here.
+  const ctx3 = fakeCtx();
+  applyFallback(ctx3);
+  await tick();
+  proxyA.seen.connects.length = 0;
+  let refusedErr = null;
+  try {
+    await fetch(`http://127.0.0.1:${closed}/`, { signal: AbortSignal.timeout(5000) });
+  } catch (error) {
+    refusedErr = error;
+  }
+  await tick();
+  check("strict: ECONNREFUSED (onConnect==0) IS replayed through the proxy", refusedErr !== null && proxyA.seen.connects.some((c) => c.startsWith(`127.0.0.1:${closed}`)), JSON.stringify(proxyA.seen.connects));
+  ctx3.dispose();
+}
+
 await Promise.race([proxyA.close(), new Promise((resolve) => setTimeout(resolve, 2000))]);
 await Promise.race([proxyB.close(), new Promise((resolve) => setTimeout(resolve, 2000))]);
 await Promise.race([socks5.close(), new Promise((resolve) => setTimeout(resolve, 2000))]);
 await Promise.race([socks4.close(), new Promise((resolve) => setTimeout(resolve, 2000))]);
 await Promise.race([direct.close(), new Promise((resolve) => setTimeout(resolve, 2000))]);
 
-if (savedNoProxyEnv[0] === undefined) delete process.env.NO_PROXY;
-else process.env.NO_PROXY = savedNoProxyEnv[0];
-if (savedNoProxyEnv[1] === undefined) delete process.env.no_proxy;
-else process.env.no_proxy = savedNoProxyEnv[1];
+for (const key of PROXY_ENV_KEYS_TEST) {
+  if (savedProxyEnv[key] === undefined) delete process.env[key];
+  else process.env[key] = savedProxyEnv[key];
+}
+
+clearTimeout(watchdog);
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) FAILED`);

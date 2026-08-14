@@ -1,6 +1,6 @@
 {
   "name": "dsh-system-proxy",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "DSH host plugin — smart outbound HTTP(S) routing: named proxies (http/https/socks4/4a/5/5h), per-host/provider/plugin rules, direct-first fallback with health memory (global fetch + node http/https).",
   "type": "module",
   "main": "lib/index.js",
@@ -65,7 +65,8 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
     "@deepseek-ai/dsh-typert-registry": "^0.1.0-rc.6",
-    "node-addon-require-builtin": "^0.1.4"
+    "node-addon-require-builtin": "^0.1.4",
+    "selfsigned": "^5.5.0"
   },
   "license": "MIT"
 }

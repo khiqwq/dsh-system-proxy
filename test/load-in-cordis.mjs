@@ -34,11 +34,19 @@ const check = (label, ok, extra = "") => {
   }
 };
 
-// The runner environment may set NO_PROXY; the plugin merges it into the
-// direct baseline. Clear it so routing checks are hermetic.
-const savedNoProxyEnv = [process.env.NO_PROXY, process.env.no_proxy];
-delete process.env.NO_PROXY;
-delete process.env.no_proxy;
+// The runner environment may set proxy vars (the harness sets HTTPS_PROXY and
+// NO_PROXY); the plugin merges NO_PROXY into the direct baseline and reads
+// proxy URLs from the standard env keys. Clear ALL of them so routing checks
+// are hermetic; restore at the end.
+const PROXY_ENV_KEYS_TEST = [
+  "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+  "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+];
+const savedProxyEnv = {};
+for (const key of PROXY_ENV_KEYS_TEST) {
+  savedProxyEnv[key] = process.env[key];
+  delete process.env[key];
+}
 
 // local CONNECT proxy
 const seen = [];
@@ -134,10 +142,10 @@ proxy.close();
 local.closeAllConnections();
 local.close();
 
-if (savedNoProxyEnv[0] === undefined) delete process.env.NO_PROXY;
-else process.env.NO_PROXY = savedNoProxyEnv[0];
-if (savedNoProxyEnv[1] === undefined) delete process.env.no_proxy;
-else process.env.no_proxy = savedNoProxyEnv[1];
+for (const key of PROXY_ENV_KEYS_TEST) {
+  if (savedProxyEnv[key] === undefined) delete process.env[key];
+  else process.env[key] = savedProxyEnv[key];
+}
 
 // exitCode instead of exit(): let pending async teardown finish first.
 process.exitCode = failures > 0 ? 1 : 0;

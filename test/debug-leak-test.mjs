@@ -22,7 +22,16 @@ const check = (label, ok, extra = "") => {
 
 const child = spawn(process.execPath, ["test/debug-leak-child.mjs"], {
   cwd: ROOT,
-  env: { ...process.env, DEBUG: "*" },
+  // The harness may set HTTPS_PROXY/NO_PROXY; strip all proxy env so the child
+  // scenario is hermetic and only the explicitly-configured credentialed
+  // proxies are exercised under DEBUG=*.
+  env: (() => {
+    const childEnv = { ...process.env, DEBUG: "*" };
+    for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]) {
+      delete childEnv[key];
+    }
+    return childEnv;
+  })(),
 });
 let stderr = "";
 let stdout = "";
