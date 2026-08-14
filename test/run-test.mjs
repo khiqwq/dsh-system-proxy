@@ -552,6 +552,41 @@ const watchdog = setTimeout(() => {
     matchRule(orListRule, { host: "b.example.com", provider: "p1", plugin: null })?.action === "proxy" &&
       matchRule(orListRule, { host: "b.example.com", provider: "p2", plugin: null }) === undefined,
   );
+
+  // multi-field AND: all THREE fields must match; each single-field mismatch
+  // (including an unknown fact) is a negative.
+  const threeField = [normalizeRule({ host: "api.deepseek.com", provider: "openai", plugin: "web", action: "proxy" })];
+  check(
+    "matchRule AND: all three fields must match (positive + negatives)",
+    matchRule(threeField, { host: "api.deepseek.com", provider: "openai", plugin: "web" })?.action === "proxy" &&
+      matchRule(threeField, { host: "api.deepseek.com", provider: "openai", plugin: "cli" }) === undefined &&
+      matchRule(threeField, { host: "api.deepseek.com", provider: "anthropic", plugin: "web" }) === undefined &&
+      matchRule(threeField, { host: "gateway.example.com", provider: "openai", plugin: "web" }) === undefined &&
+      matchRule(threeField, { host: "api.deepseek.com", provider: null, plugin: "web" }) === undefined &&
+      matchRule(threeField, { host: "api.deepseek.com", provider: "openai", plugin: null }) === undefined,
+  );
+
+  // multi-field AND with in-field OR lists on TWO fields at once.
+  const multiOrList = [normalizeRule({ host: ["a.example.com", "b.example.com"], provider: ["p1", "p2"], action: "proxy" })];
+  check(
+    "matchRule AND: multi-field with in-field OR lists",
+    matchRule(multiOrList, { host: "a.example.com", provider: "p2", plugin: null })?.action === "proxy" &&
+      matchRule(multiOrList, { host: "b.example.com", provider: "p1", plugin: null })?.action === "proxy" &&
+      matchRule(multiOrList, { host: "c.example.com", provider: "p1", plugin: null }) === undefined &&
+      matchRule(multiOrList, { host: "a.example.com", provider: "p9", plugin: null }) === undefined,
+  );
+
+  // AND applies per rule; first matching rule wins across the list.
+  const prioRules = [
+    normalizeRule({ host: "api.deepseek.com", provider: "openai", action: "direct" }),
+    normalizeRule({ host: "api.deepseek.com", action: "proxy" }),
+  ];
+  check(
+    "matchRule AND: first rule wins; later rule applies only when prior fields mismatch",
+    matchRule(prioRules, { host: "api.deepseek.com", provider: "openai", plugin: null })?.action === "direct" &&
+      matchRule(prioRules, { host: "api.deepseek.com", provider: "anthropic", plugin: null })?.action === "proxy" &&
+      matchRule(prioRules, { host: "api.deepseek.com", provider: null, plugin: null })?.action === "proxy",
+  );
   check("normalizeRule proxy default", normalizeRule({ host: "h", action: "proxy" }).proxy === "default");
   let threw = false;
   try {
