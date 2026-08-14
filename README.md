@@ -145,7 +145,7 @@ fetch 路径对**所有** socks 协议统一使用**自定义无状态 connector
 
 规则按数组顺序匹配，首条命中的规则生效：
 
-- **所有指定字段必须同时命中**（字段之间是 AND）；每个字段自己的值列表内部是 OR（"host 是 A 或 B，且 provider 是 p"）。字段为空或请求方未知时不算约束。想表达"任一路由条件都行"，就拆成多条按先后顺序的规则，或用 `host:port` 等更精确的模式缩小范围。
+- **所有指定字段必须同时命中**（字段之间是 AND）；每个字段自己的值列表内部是 OR（"host 是 A 或 B，且 provider 是 p"）。指定字段在请求上下文中未知时，该规则不匹配。想表达"任一路由条件都行"，就拆成多条按先后顺序的规则，或用 `host:port` 等更精确的模式缩小范围。
 
 例如 provider 为 `openai` **且** host 为两个候选之一，才命中这条规则：
 
@@ -163,7 +163,7 @@ fetch 路径对**所有** socks 协议统一使用**自定义无状态 connector
 | `fallback` | 先直连；满足安全条件时在连接前失败或健康记忆触发后改用代理 |
 | `block` | 本地拒绝请求（`NETWORK_BLOCKED`） |
 
-引用不存在的代理名会在启动时 fail loud（`UNKNOWN_PROXY`）；`source: system|env` 的代理在当前未开启时会跳过并在运行期以 warning 降级为直连。
+引用不存在或当前不可用的代理名会 fail loud（`UNKNOWN_PROXY`），不会静默降级直连；`source: system|env` 当前没有可用代理时，只有未选择该代理的请求可以继续。
 
 ## Provider / plugin 上下文
 
@@ -188,7 +188,7 @@ for await (const chunk of attributed) { /* currentRoute() 可见 */ }
 
 DSH `llm/stream` 集成应包装异步迭代器的 `next` / `return` / `throw` 生命周期，使惰性 SSE 消费期间仍保留 provider/model 上下文。
 
-`trustRouteHeaders` 默认关闭。若开启，可读取 `x-dsh-route-provider` 与 `x-dsh-route-plugin`；这些内部路由头在策略判定后、**发出请求前会被自动剥离**，不会发给 API 上游（fetch 与 node http(s) 两条路径都已处理）。
+`trustRouteHeaders` 默认关闭。若开启，可读取 `x-dsh-route-provider` 与 `x-dsh-route-plugin`。无论是否信任，这些内部路由控制头都会在**发出请求前被自动剥离**，不会泄漏给 API 上游（fetch 与 node http(s) 两条路径都已处理）。
 
 ## Fallback 安全模型
 

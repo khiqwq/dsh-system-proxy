@@ -45,8 +45,8 @@ Out of scope:
 - SOCKS4/4a with an IPv6 target is refused explicitly
   (`SOCKS4_IPV6_UNSUPPORTED`), never silently direct.
 - By default, `trustRouteHeaders` is off: `x-dsh-route-*` headers are
-  forgeable and are not honored unless explicitly enabled; when enabled, they
-  are stripped from the outbound request before dispatch.
+  forgeable and are not honored unless explicitly enabled. They are always
+  stripped from the outbound request before dispatch, even while untrusted.
 - Route context for provider/plugin rules is never inferred from URLs; it is
   only attached explicitly via `ctx.networkRoute.run(...)`.
 - `fallback` replays only safe requests (bounded, buffered bodies; the

@@ -439,6 +439,37 @@ const fetchSafe = async (url, init) => {
   }
 };
 
+/**
+ * Node http(s) request with a HARD bound: a hung socket (proxy or tunnel)
+ * can never stall the suite — the promise resolves with the response, or null
+ * on error / timeout, within `timeoutMs`.
+ * @param make - `(cb) => ClientRequest`, wiring the response callback.
+ */
+function boundedNodeRequest(make, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+    let req;
+    try {
+      req = make((res) => finish(res));
+    } catch {
+      finish(null);
+      return;
+    }
+    req.on?.("error", () => finish(null));
+    req.setTimeout?.(timeoutMs, () => {
+      req.destroy?.();
+      finish(null);
+    });
+    req.end?.();
+  });
+}
+
 const proxyA = await startProxy();
 const proxyB = await startProxy();
 const socks5 = await startSocks5Proxy();
@@ -707,7 +738,7 @@ const watchdog = setTimeout(() => {
   apply(ctx, {
     ...PROTECT_OFF,
     noProxy: [],
-    proxies: { pA: `http://127.0.0.1:${proxyA.port}`, pB: `http://127.0.0.1:${proxyB.port}` },
+    proxies: { pA: `http://auth-user:auth-pass@127.0.0.1:${proxyA.port}`, pB: `http://127.0.0.1:${proxyB.port}` },
     rules: [
       { host: "127.0.0.1", action: "proxy", proxy: "pA" },
       { host: "127.0.0.2", action: "proxy", proxy: "pB" },
@@ -725,6 +756,13 @@ const watchdog = setTimeout(() => {
     "rules: proxyA saw exactly one 127.0.0.1 CONNECT",
     proxyA.seen.connects.length === 1 && proxyA.seen.connects[0].startsWith(`127.0.0.1:${direct.port}`),
     JSON.stringify(proxyA.seen.connects),
+  );
+  check(
+    "http proxy auth: fetch injects Basic Proxy-Authorization",
+    proxyA.seen.proxyAuthorization.includes(
+      `Basic ${Buffer.from("auth-user:auth-pass").toString("base64")}`,
+    ),
+    JSON.stringify(proxyA.seen.proxyAuthorization),
   );
   check("rules: proxyB saw nothing", proxyB.seen.connects.length === 0);
 
@@ -800,7 +838,8 @@ const watchdog = setTimeout(() => {
   check("route header: stripped before upstream", JSON.parse(routed).provider === null, routed);
   ctx.dispose();
 
-  // trustRouteHeaders off → header is NOT used for routing (and not stripped)
+  // trustRouteHeaders off → header is NOT used for routing, but the internal
+  // control header is still stripped so it can never leak upstream.
   const ctx2 = fakeCtx();
   apply(ctx2, {
     ...PROTECT_OFF,
@@ -815,7 +854,7 @@ const watchdog = setTimeout(() => {
     headers: { "x-dsh-route-provider": "header-provider" },
   });
   check("route header: ignored when trustRouteHeaders off (direct)", proxyA.seen.connects.length === 0, JSON.stringify(proxyA.seen.connects));
-  check("route header: passed through when off", JSON.parse(ignored).provider === "header-provider", ignored);
+  check("route header: stripped even when trust is off", JSON.parse(ignored).provider === null, ignored);
   ctx2.dispose();
   echo.closeAllConnections();
   echo.close();
@@ -1003,11 +1042,7 @@ const watchdog = setTimeout(() => {
 
   // socks4a + node http.request (domain form via localhost)
   socks4.seen.length = 0;
-  const node4a = await new Promise((resolve) => {
-    const req = http.request(`http://localhost:${direct.port}/node4a`, (res) => resolve(res));
-    req.on("error", () => resolve(null));
-    req.end();
-  });
+  const node4a = await boundedNodeRequest((cb) => http.request(`http://localhost:${direct.port}/node4a`, cb));
   const node4aText = node4a
     ? await new Promise((r) => {
         let data = "";
@@ -1025,11 +1060,7 @@ const watchdog = setTimeout(() => {
 
   // socks4 + node http.request
   socks4.seen.length = 0;
-  const node4 = await new Promise((resolve) => {
-    const req = http.request(`http://127.0.0.3:${direct.port}/node4`, (res) => resolve(res));
-    req.on("error", () => resolve(null));
-    req.end();
-  });
+  const node4 = await boundedNodeRequest((cb) => http.request(`http://127.0.0.3:${direct.port}/node4`, cb));
   const node4Text = node4
     ? await new Promise((r) => {
         let data = "";
@@ -1046,11 +1077,7 @@ const watchdog = setTimeout(() => {
 
   // socks5 + node http.request
   socks5.seen.length = 0;
-  const node5 = await new Promise((resolve) => {
-    const req = http.request(`http://127.0.0.1:${direct.port}/node5`, (res) => resolve(res));
-    req.on("error", () => resolve(null));
-    req.end();
-  });
+  const node5 = await boundedNodeRequest((cb) => http.request(`http://127.0.0.1:${direct.port}/node5`, cb));
   const node5Text = node5
     ? await new Promise((r) => {
         let data = "";
@@ -1068,11 +1095,7 @@ const watchdog = setTimeout(() => {
 
   // socks5h + node http.request (remote-DNS scheme)
   socks5.seen.length = 0;
-  const node5h = await new Promise((resolve) => {
-    const req = http.request(`http://127.0.0.2:${direct.port}/node5h`, (res) => resolve(res));
-    req.on("error", () => resolve(null));
-    req.end();
-  });
+  const node5h = await boundedNodeRequest((cb) => http.request(`http://127.0.0.2:${direct.port}/node5h`, cb));
   const node5hText = node5h
     ? await new Promise((r) => {
         let data = "";
@@ -1087,6 +1110,29 @@ const watchdog = setTimeout(() => {
     socks5.seen.length === 1 && socks5.seen[0].startsWith(`127.0.0.2:${direct.port}`),
     JSON.stringify(socks5.seen),
   );
+
+  // socks5 + node https.request — TLS is wrapped OVER the tunneled socket
+  // (SocksHttpsAgent), so the https target is reached through the proxy.
+  const tlsServer = await startTlsServer();
+  socks5.seen.length = 0;
+  const nodeHttps = await boundedNodeRequest((cb) =>
+    https.request(`https://127.0.0.1:${tlsServer.port}/`, { rejectUnauthorized: false }, cb),
+  );
+  const nodeHttpsText = nodeHttps
+    ? await new Promise((r) => {
+        let data = "";
+        nodeHttps.on("data", (d) => (data += d));
+        nodeHttps.on("end", () => r(data));
+      })
+    : null;
+  check("socks5: node https.request (TLS over tunnel) served", nodeHttpsText === "tls:/");
+  await tick();
+  check(
+    "socks5: https proxy saw exactly one 127.0.0.1 CONNECT",
+    socks5.seen.length === 1 && socks5.seen[0].startsWith(`127.0.0.1:${tlsServer.port}`),
+    JSON.stringify(socks5.seen),
+  );
+  await tlsServer.close();
   ctx.dispose();
 }
 
@@ -1397,41 +1443,24 @@ const watchdog = setTimeout(() => {
   await tick();
 
   // http.request(url, cb)
-  const r1 = await new Promise((resolve) => {
-    const req = http.request(`http://127.0.0.1:${direct.port}/cb1`, (res) => resolve(res));
-    req.on("error", () => resolve(null));
-    req.end();
-  });
+  const r1 = await boundedNodeRequest((cb) => http.request(`http://127.0.0.1:${direct.port}/cb1`, cb));
   check("http.request(url, cb): callback fired", r1 !== null && r1.statusCode === 200);
 
   // http.get(url, cb)
-  const g1 = await new Promise((resolve) => {
-    http.get(`http://127.0.0.1:${direct.port}/get1`, (res) => resolve(res)).on("error", () => resolve(null));
-  });
+  const g1 = await boundedNodeRequest((cb) => http.get(`http://127.0.0.1:${direct.port}/get1`, cb));
   check("http.get(url, cb): callback fired", g1 !== null && g1.statusCode === 200);
 
   // options-form: http.request({ host, port, path }, cb)
-  const r2 = await new Promise((resolve) => {
-    const req = http.request(
-      { host: "127.0.0.1", port: direct.port, path: "/opt1" },
-      (res) => resolve(res),
-    );
-    req.on("error", () => resolve(null));
-    req.end();
-  });
+  const r2 = await boundedNodeRequest((cb) =>
+    http.request({ host: "127.0.0.1", port: direct.port, path: "/opt1" }, cb),
+  );
   check("http.request(options, cb): callback fired", r2 !== null && r2.statusCode === 200);
 
   // https.request(url, cb) — local TLS target through the proxy (deterministic)
   const tlsServer = await startTlsServer();
-  const r3 = await new Promise((resolve) => {
-    const req = https.request(
-      `https://127.0.0.1:${tlsServer.port}/`,
-      { rejectUnauthorized: false },
-      (res) => resolve(res),
-    );
-    req.on("error", () => resolve(null));
-    req.end();
-  });
+  const r3 = await boundedNodeRequest((cb) =>
+    https.request(`https://127.0.0.1:${tlsServer.port}/`, { rejectUnauthorized: false }, cb),
+  );
   check("https.request(url, cb): callback fired", r3 !== null && r3.statusCode === 200);
   await tlsServer.close();
   ctx.dispose();
@@ -1559,11 +1588,7 @@ const watchdog = setTimeout(() => {
   check("socks5 auth: fetch via username/password fields succeeds", r2 === "direct:/a2");
 
   // auth success: node http path
-  const n1 = await new Promise((resolve) => {
-    const req = http.request(`http://127.0.0.1:${direct.port}/n-auth`, (res) => resolve(res));
-    req.on("error", () => resolve(null));
-    req.end();
-  });
+  const n1 = await boundedNodeRequest((cb) => http.request(`http://127.0.0.1:${direct.port}/n-auth`, cb));
   check("socks5 auth: node http.request via auth proxy succeeds", n1 !== null && n1.statusCode === 200);
 
   // wrong password rejects
