@@ -140,7 +140,7 @@ window.__ModuleLoader__.load({
       const locale = ctx.get("locale");
       ctx.effect(() => locale.register(NAMESPACE, { zh, en }), "system-proxy: dictionaries");
       const t = locale.bind(NAMESPACE);
-      ctx.slots.inject("settings.plugin.item", () => ctx.slots.register({ name: "settings.plugin.item", id: "system-proxy", order: 30, locale: NAMESPACE }, () => h(SystemProxySettingsCard, { scope, api, locale, t })));
+      ctx.slots.inject("settings.plugin.item", () => ctx.slots.register({ name: "settings.plugin.item", key: "system-proxy", order: 30, locale: NAMESPACE }, () => h(SystemProxySettingsCard, { scope, api, locale, t })));
     }
     exports.apply = apply;
     exports.inject = inject;
