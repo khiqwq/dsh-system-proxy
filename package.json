@@ -83,7 +83,7 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
     "@deepseek-ai/dsh-typert-registry": "^0.1.0-rc.6",
-    "node-addon-require-builtin": "^0.1.4",
+    "node-addon-require-builtin": "^0.1.5",
     "selfsigned": "^5.5.0"
   },
   "license": "MIT",
