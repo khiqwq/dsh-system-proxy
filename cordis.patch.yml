@@ -17,13 +17,14 @@
 
         # Legacy-compatible surface. URL schemes: http, https, socks4,
         # socks4a, socks5, socks5h. Bare host:port is treated as http.
+        # Linux KDE 读取 KIO；其他桌面（含 niri）读取 GNOME GSettings。
+        # 仅支持手动系统代理，且每 5 秒跟随系统开关；PAC/WPAD 不适用。
         mode: auto
         url: ''
         noProxy:
           - localhost
           - '127.0.0.1'
           - '::1'
-          - api.deepseek.com
         only: []
         patchNodeHttp: true
         # Always keep core loopback safe. With true (default), also merge

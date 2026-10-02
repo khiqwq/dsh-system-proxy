@@ -43,7 +43,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node test/run-test.mjs && node test/load-in-cordis.mjs && node test/typert-test.mjs && node test/debug-leak-test.mjs && npm run settings-test && npm run client-test",
+    "test": "node test/system-source-test.mjs && node test/run-test.mjs && node test/load-in-cordis.mjs && node test/typert-test.mjs && node test/debug-leak-test.mjs && npm run settings-test && npm run client-test",
     "settings-test": "node test/settings-test.mjs",
     "prepack": "npm run build && npm test",
     "build:client": "node build-client.mjs",

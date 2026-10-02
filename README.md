@@ -46,6 +46,16 @@ npm install <dsh-system-proxy 源码目录的绝对路径>
 # 将 "dsh-system-proxy" 加入 package.json 的 dsh.profile.bundles
 ```
 
+Linux 桌面版的 `desktop` profile 由 Electron 独占，不能通过 CLI 的 `dsh plugin --profile desktop add` 管理。源码安装示例：
+
+```sh
+cd \"${DSH_HOME:-$HOME/.dsh}/profiles/desktop\"
+npm install /absolute/path/to/dsh-system-proxy
+# 在本目录 package.json 的 dsh.profile.bundles 中加入 \"dsh-system-proxy\"
+```
+
+然后从托盘真正退出桌面版再启动；仅关闭窗口会隐藏应用，不会重新加载 Host。
+
 发布后可使用：
 
 ```powershell
@@ -81,7 +91,6 @@ dsh plugin --profile <name> add dsh-system-proxy
       - localhost
       - '127.0.0.1'
       - '::1'
-      - api.deepseek.com
     only: []                   # 旧配置兼容：非空时只代理这里的主机
 
     proxies:
@@ -130,7 +139,7 @@ Cordis loader 只在 EntryOptions 顶层合并。`config` 一旦出现在后续 
 | --- | --- |
 | `auto` | 代理环境变量 → OS 系统代理 → 显式 `url` |
 | `env` | `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY`（含小写） |
-| `system` | Windows WinINET / macOS `scutil` |
+| `system` | Windows WinINET / macOS `scutil --proxy` / Linux KDE KIO 或 GNOME GSettings |
 | `manual` | 仅显式 `url` |
 
 专用环境变量：
@@ -141,6 +150,10 @@ Cordis loader 只在 EntryOptions 顶层合并。`config` 一旦出现在后续 
 - `NO_PROXY` / `no_proxy`：追加直连规则。
 
 显式 URL 支持 `http://`、`https://`、`socks4://`、`socks4a://`、`socks5://`、`socks5h://`（SOCKS 默认端口 1080；`socks4a` 与 `socks5h` 由代理端解析域名，`socks4` 与 `socks5` 本地解析）。
+
+Linux 在 `XDG_CURRENT_DESKTOP` 含 `KDE` 时以 `kioslaverc` 的 `ProxyType=1` 为准；其他桌面（包括 niri）以 `org.gnome.system.proxy` 的 `mode='manual'` 为准。后者只需要可用的 GSettings/dconf，不要求运行 GNOME Shell。HTTPS 代理优先，其次 HTTP、SOCKS；系统绕过列表会加入 `noProxy`（Windows 的 `<local>`、macOS 的 `ExcludeSimpleHostnames` 也会绕过无点号的主机名）。`mode: auto` 的环境变量优先；若要让 Clash Verge 的系统代理开关而不是终端变量决定 DSH 路由，设置 `mode: system`。
+
+已启用的系统代理每 5 秒检查一次配置变化；关闭时还原传输，重新开启时恢复代理。PAC/WPAD 自动配置与按协议使用不同代理端点不在当前单 URL 路由模型内：自动配置模式不会被当成手动代理地址。要使用 PAC 或动态的逐 URL 代理选择，需要另外设计按目标 URL 解析的路由器，而不是把 PAC URL 传给 HTTP ProxyAgent。
 
 ### SOCKS 实现说明（fetch 路径）
 

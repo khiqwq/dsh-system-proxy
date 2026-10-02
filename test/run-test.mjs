@@ -498,6 +498,16 @@ for (const key of PROXY_ENV_KEYS_TEST) {
   savedProxyEnv[key] = process.env[key];
   delete process.env[key];
 }
+// Keep auto mode deterministic on Linux even when the developer has an active
+// GNOME/KDE system proxy. The system-source suite tests real discovery separately.
+const savedDesktopEnv = {
+  XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP,
+  GSETTINGS_BACKEND: process.env.GSETTINGS_BACKEND,
+};
+if (process.platform === "linux") {
+  process.env.XDG_CURRENT_DESKTOP = "DSH_TEST";
+  process.env.GSETTINGS_BACKEND = "memory";
+}
 
 console.log(
   `proxyA :${proxyA.port}, proxyB :${proxyB.port}, socks5 :${socks5.port}, ` +
@@ -1883,6 +1893,10 @@ await Promise.race([direct.close(), new Promise((resolve) => setTimeout(resolve,
 for (const key of PROXY_ENV_KEYS_TEST) {
   if (savedProxyEnv[key] === undefined) delete process.env[key];
   else process.env[key] = savedProxyEnv[key];
+}
+for (const [key, value] of Object.entries(savedDesktopEnv)) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
 }
 
 clearTimeout(watchdog);

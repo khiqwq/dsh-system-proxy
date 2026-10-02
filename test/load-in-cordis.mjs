@@ -47,6 +47,14 @@ for (const key of PROXY_ENV_KEYS_TEST) {
   savedProxyEnv[key] = process.env[key];
   delete process.env[key];
 }
+const savedDesktopEnv = {
+  XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP,
+  GSETTINGS_BACKEND: process.env.GSETTINGS_BACKEND,
+};
+if (process.platform === "linux") {
+  process.env.XDG_CURRENT_DESKTOP = "DSH_TEST";
+  process.env.GSETTINGS_BACKEND = "memory";
+}
 
 // local CONNECT proxy
 const seen = [];
@@ -145,6 +153,10 @@ local.close();
 for (const key of PROXY_ENV_KEYS_TEST) {
   if (savedProxyEnv[key] === undefined) delete process.env[key];
   else process.env[key] = savedProxyEnv[key];
+}
+for (const [key, value] of Object.entries(savedDesktopEnv)) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
 }
 
 // exitCode instead of exit(): let pending async teardown finish first.
