@@ -80,7 +80,7 @@
     "@deepseek-ai/dsh-settings": "^0.1.0-rc.6"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis": "^4.0.4",
     "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
     "@deepseek-ai/dsh-typert-registry": "^0.1.0-rc.6",
     "node-addon-require-builtin": "^0.1.4",
@@ -95,7 +95,7 @@
   "peerDependencies": {
     "react": "^18.2.0",
     "@deepseek-ai/dsh-api-remotes": "^0.1.0-rc.6",
-    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis": "^4.0.4",
     "@deepseek-ai/dsh-client-connection": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
